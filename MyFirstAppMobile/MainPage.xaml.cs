@@ -1,8 +1,11 @@
-﻿namespace MyFirstAppMobile
+﻿using System.Windows.Input;
+
+namespace MyFirstAppMobile
 {
     public partial class MainPage : ContentPage
     {
         int count = 0;
+
 
         public MainPage()
         {
@@ -19,6 +22,11 @@
                 CounterBtn.Text = $"Clicked {count} times";
 
             SemanticScreenReader.Announce(CounterBtn.Text);
+        }
+
+        private async void OnEntryPageClicked(object sender, EventArgs e)
+        {
+            await Shell.Current.GoToAsync(nameof(EntryPage));
         }
     }
 }

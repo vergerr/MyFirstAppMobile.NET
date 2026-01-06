@@ -1,27 +1,26 @@
-# Date au format AAAAMMJJ
 $date = Get-Date -Format "yyyyMMdd"
-
-# Nom du fichier d'export
 $exportFile = "Export$date.txt"
 
-# Supprime le fichier s'il existe déjà
-if (Test-Path $exportFile) {
-    Remove-Item $exportFile
-}
+if (Test-Path $exportFile) { Remove-Item $exportFile }
 
-# Récupération de tous les fichiers .cs récursivement
-Get-ChildItem -Path . -Recurse -Filter "*.cs" | ForEach-Object {
+# On récupère les fichiers avec \* pour que -Include fonctionne
+Get-ChildItem -Path ".\*" -Recurse -Include *.cs, *.xaml | Where-Object { 
+    # Filtre 1 : Exclure le dossier 'obj'
+    $_.FullName -notmatch '\\obj\\' -and 
+    # Filtre 2 : Exclure le fichier d'export lui-même pour éviter une boucle infinie
+    $_.Name -ne $exportFile 
+} | ForEach-Object {
 
-    # Entête pour identifier le fichier
+    Write-Host "Traitement de : $($_.Name)" # Optionnel : pour voir l'avancement
+
     Add-Content -Path $exportFile -Value "===== $($_.FullName) ====="
     Add-Content -Path $exportFile -Value ""
 
-    # Contenu du fichier
+    # Lecture et ajout du contenu
     Get-Content $_.FullName | Add-Content -Path $exportFile
 
-    # Séparation entre fichiers
-    Add-Content -Path $exportFile -Value ""
-    Add-Content -Path $exportFile -Value ""
+    # Ajout de lignes vides pour la séparation
+    Add-Content -Path $exportFile -Value "`n`n"
 }
 
-Write-Host "Export terminé : $exportFile"
+Write-Host "Export terminé : $exportFile" -ForegroundColor Green

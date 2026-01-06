@@ -30,6 +30,10 @@
                 SemanticProperties.Hint="Counts the number of times you click"
                 Clicked="OnCounterClicked"
                 HorizontalOptions="Fill" />
+            <Button 
+                x:Name="GoEntryPageBtn"
+                Text="Go Entry"
+                Clicked="OnEntryPageClicked"/>
         </VerticalStackLayout>
     </ScrollView>
 

@@ -1,4 +1,6 @@
-﻿namespace MyFirstAppMobile
+﻿using System.Diagnostics;
+
+namespace MyFirstAppMobile
 {
     public partial class App : Application
     {
