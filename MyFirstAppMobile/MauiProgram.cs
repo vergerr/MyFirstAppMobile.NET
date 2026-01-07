@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
 using MyFirstAppMobile.Interface;
+using MyFirstAppMobile.ViewModels;
 
 
 namespace MyFirstAppMobile
@@ -17,6 +18,9 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
+            builder.Services.AddSingleton<MainPage>();
+            builder.Services.AddSingleton<EntriesViewModel>();
+            builder.Services.AddTransient<EntryPage>();
 
             builder.UseMauiApp<App>()
                 .ConfigureFonts(fonts =>
@@ -25,18 +29,18 @@ namespace MyFirstAppMobile
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
-            builder.ConfigureLifecycleEvents(events =>
-            {
-#if ANDROID
-            events.AddAndroid(android =>
-            {
-                android.OnCreate((activity, bundle) =>
-                    builder.Services.BuildServiceProvider()
-                        .GetRequiredService<IPlatformLogger>()
-                        .Log("Activity OnCreate"));
-            });
-#endif
-            });
+//            builder.ConfigureLifecycleEvents(events =>
+//            {
+//#if ANDROID
+//            events.AddAndroid(android =>
+//            {
+//                android.OnCreate((activity, bundle) =>
+//                    builder.Services.BuildServiceProvider()
+//                        .GetRequiredService<IPlatformLogger>()
+//                        .Log("Activity OnCreate"));
+//            });
+//#endif
+//            });
 
 #if DEBUG
             builder.Logging.AddDebug();

@@ -3,10 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="MyFirstAppMobile.EntryPage"
              Title="EntryPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
+    <VerticalStackLayout Padding="20" Spacing="15">
+        <Label Text="Nouvelle Activité" FontSize="24" FontAttributes="Bold" />
+
+        <Entry Placeholder="Type d'activité (ex: Course)" 
+           Text="{Binding ActivityType}" />
+
+        <Entry Placeholder="Durée (minutes)" 
+           Text="{Binding DurationMinutes}" 
+           Keyboard="Numeric" />
+
+        <Editor Placeholder="Notes additionnelles" 
+            Text="{Binding Notes}"
+            HeightRequest="100" />
+
+        <Button Text="Enregistrer" 
+            Command="{Binding SaveEntryCommand}"
+            BackgroundColor="Green"
+            TextColor="White" />
+
+        <Button Text="Annuler" 
+            Command="{Binding CancelCommand}"
+            BackgroundColor="Gray" />
     </VerticalStackLayout>
 </ContentPage>

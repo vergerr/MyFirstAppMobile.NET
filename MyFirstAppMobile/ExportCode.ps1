@@ -7,6 +7,7 @@ if (Test-Path $exportFile) { Remove-Item $exportFile }
 Get-ChildItem -Path ".\*" -Recurse -Include *.cs, *.xaml | Where-Object { 
     # Filtre 1 : Exclure le dossier 'obj'
     $_.FullName -notmatch '\\obj\\' -and 
+    $_.FullName -notmatch '\\Resources\\' -and 
     # Filtre 2 : Exclure le fichier d'export lui-même pour éviter une boucle infinie
     $_.Name -ne $exportFile 
 } | ForEach-Object {
