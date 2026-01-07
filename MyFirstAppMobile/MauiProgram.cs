@@ -29,19 +29,6 @@ namespace MyFirstAppMobile
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
-//            builder.ConfigureLifecycleEvents(events =>
-//            {
-//#if ANDROID
-//            events.AddAndroid(android =>
-//            {
-//                android.OnCreate((activity, bundle) =>
-//                    builder.Services.BuildServiceProvider()
-//                        .GetRequiredService<IPlatformLogger>()
-//                        .Log("Activity OnCreate"));
-//            });
-//#endif
-//            });
-
 #if DEBUG
             builder.Logging.AddDebug();
 #endif

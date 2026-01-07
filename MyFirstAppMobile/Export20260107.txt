@@ -243,22 +243,59 @@ namespace MyFirstAppMobile.WinUI
 ===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\ViewModels\EntriesViewModel.cs =====
 
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MyFirstAppMobile.Models;
 using System.Collections.ObjectModel;
-using System.Windows.Input;
 
 namespace MyFirstAppMobile.ViewModels
 {
-    public class EntriesViewModel : ObservableObject
+    public partial class EntriesViewModel : ObservableObject
     {
         public ObservableCollection<FitnessEntry> Entries { get; set; } = new();
+        
+        // Propriétés pour le formulaire (liées aux champs de saisie)
+        [ObservableProperty]
+        string activityType;
 
-        public EntriesViewModel()
+        [ObservableProperty]
+        int durationMinutes;
+
+        [ObservableProperty]
+        string notes;
+
+        [RelayCommand]
+        public async Task SaveEntry()
         {
-            //Fake seed
-            Entries.Add(new FitnessEntry() { ActivityType = "Activity A", DurationMinutes = 5, Notes = "Une note" });
+            // 1. On crée le nouvel objet avec les données saisies
+            var newEntry = new FitnessEntry
+            {
+                ActivityType = this.ActivityType,
+                DurationMinutes = this.DurationMinutes,
+                Notes = this.Notes,
+                Date = DateTime.Now
+            };
+
+            // 2. On l'ajoute à la liste
+            Entries.Add(newEntry);
+
+            // 3. On vide le formulaire pour la prochaine fois
+            activityType = string.Empty;
+            durationMinutes = 0;
+            notes = string.Empty;
+
+            // 4. On revient en arrière
+            await Shell.Current.GoToAsync("..");
         }
 
+        [RelayCommand]
+        public async Task Cancel()
+        {
+            await Shell.Current.GoToAsync("..");
+        }
+
+
+
+        [RelayCommand]
         public async Task Add()
         {
             await Shell.Current.GoToAsync(nameof(EntryPage));
@@ -375,11 +412,28 @@ namespace MyFirstAppMobile
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              x:Class="MyFirstAppMobile.EntryPage"
              Title="EntryPage">
-    <VerticalStackLayout>
-        <Label 
-            Text="Welcome to .NET MAUI!"
-            VerticalOptions="Center" 
-            HorizontalOptions="Center" />
+    <VerticalStackLayout Padding="20" Spacing="15">
+        <Label Text="Nouvelle ActivitÃ©" FontSize="24" FontAttributes="Bold" />
+
+        <Entry Placeholder="Type d'activitÃ© (ex: Course)" 
+           Text="{Binding ActivityType}" />
+
+        <Entry Placeholder="DurÃ©e (minutes)" 
+           Text="{Binding DurationMinutes}" 
+           Keyboard="Numeric" />
+
+        <Editor Placeholder="Notes additionnelles" 
+            Text="{Binding Notes}"
+            HeightRequest="100" />
+
+        <Button Text="Enregistrer" 
+            Command="{Binding SaveEntryCommand}"
+            BackgroundColor="Green"
+            TextColor="White" />
+
+        <Button Text="Annuler" 
+            Command="{Binding CancelCommand}"
+            BackgroundColor="Gray" />
     </VerticalStackLayout>
 </ContentPage>
 
@@ -466,10 +520,10 @@ namespace MyFirstAppMobile
 {
     public partial class MainPage : ContentPage
     {
-        public MainPage()
+        public MainPage(EntriesViewModel viewModel)
         {
             InitializeComponent();
-            BindingContext = new EntriesViewModel();
+            BindingContext = viewModel;
         }
     }
 }
@@ -498,6 +552,7 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
+            builder.Services.AddSingleton<MainPage>();
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryPage>();
 
@@ -508,18 +563,18 @@ namespace MyFirstAppMobile
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 });
 
-            builder.ConfigureLifecycleEvents(events =>
-            {
-#if ANDROID
-            events.AddAndroid(android =>
-            {
-                android.OnCreate((activity, bundle) =>
-                    builder.Services.BuildServiceProvider()
-                        .GetRequiredService<IPlatformLogger>()
-                        .Log("Activity OnCreate"));
-            });
-#endif
-            });
+//            builder.ConfigureLifecycleEvents(events =>
+//            {
+//#if ANDROID
+//            events.AddAndroid(android =>
+//            {
+//                android.OnCreate((activity, bundle) =>
+//                    builder.Services.BuildServiceProvider()
+//                        .GetRequiredService<IPlatformLogger>()
+//                        .Log("Activity OnCreate"));
+//            });
+//#endif
+//            });
 
 #if DEBUG
             builder.Logging.AddDebug();
