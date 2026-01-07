@@ -18,6 +18,13 @@ namespace MyFirstAppMobile
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
 
+            builder.UseMauiApp<App>()
+                .ConfigureFonts(fonts =>
+                {
+                    fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                    fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                });
+
             builder.ConfigureLifecycleEvents(events =>
             {
 #if ANDROID
@@ -31,6 +38,9 @@ namespace MyFirstAppMobile
 #endif
             });
 
+#if DEBUG
+            builder.Logging.AddDebug();
+#endif
             return builder.Build();
         }
     }
