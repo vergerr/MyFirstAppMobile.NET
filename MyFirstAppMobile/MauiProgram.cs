@@ -18,8 +18,11 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
-            builder.Services.AddSingleton<MainPage>();
+            
             builder.Services.AddSingleton<EntriesViewModel>();
+            builder.Services.AddTransient<EntryFormViewModel>();
+
+            builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
 
             builder.UseMauiApp<App>()

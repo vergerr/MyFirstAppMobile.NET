@@ -5,9 +5,9 @@ namespace MyFirstAppMobile;
 
 public partial class EntryPage : ContentPage
 {
-	public EntryPage(EntriesViewModel viewModel)
+	public EntryPage(EntryFormViewModel vm)
 	{
 		InitializeComponent();
-		BindingContext = viewModel;
+		BindingContext = vm;
 	}
 }
