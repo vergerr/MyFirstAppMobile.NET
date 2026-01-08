@@ -1,6 +1,9 @@
 ﻿<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="MyFirstAppMobile.MainPage">
+             xmlns:viewmodels="clr-namespace:MyFirstAppMobile.ViewModels"
+             xmlns:models="clr-namespace:MyFirstAppMobile.Models"
+             x:Class="MyFirstAppMobile.MainPage"
+             x:DataType="viewmodels:EntriesViewModel">
 
     <VerticalStackLayout Padding="16" Spacing="12">
 
@@ -9,12 +12,15 @@
 
         <CollectionView ItemsSource="{Binding Entries}">
             <CollectionView.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="models:FitnessEntry">
                     <VerticalStackLayout Padding="12">
                         <Label Text="{Binding ActivityType}" FontSize="18"/>
                         <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
                         <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
                         <Label Text="{Binding Notes}" FontAttributes="Italic"/>
+                        <Button Text="Supprimer l'entrée" 
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding Id}" />
                     </VerticalStackLayout>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

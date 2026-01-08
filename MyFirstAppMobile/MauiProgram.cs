@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
+using MyFirstAppMobile.Data;
 using MyFirstAppMobile.Interface;
 using MyFirstAppMobile.ViewModels;
 
@@ -18,6 +19,7 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
+            builder.Services.AddSingleton<IEntriesRepository, InMemoryEntriesRepository>();
             
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryFormViewModel>();

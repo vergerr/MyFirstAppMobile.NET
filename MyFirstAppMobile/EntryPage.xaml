@@ -7,14 +7,14 @@
         <Label Text="Nouvelle Activité" FontSize="24" FontAttributes="Bold" />
 
         <Entry Placeholder="Type d'activité (ex: Course)" 
-           Text="{Binding ActivityType}" />
+           Text="{Binding ActivityType, Mode=TwoWay}" />
 
         <Entry Placeholder="Durée (minutes)" 
-           Text="{Binding DurationMinutes}" 
+           Text="{Binding DurationMinutes, Mode=TwoWay}" 
            Keyboard="Numeric" />
 
         <Editor Placeholder="Notes additionnelles" 
-            Text="{Binding Notes}"
+            Text="{Binding Notes, Mode=TwoWay}"
             HeightRequest="100" />
 
         <Button Text="Enregistrer" 

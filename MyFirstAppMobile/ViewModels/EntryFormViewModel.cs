@@ -29,9 +29,9 @@ namespace MyFirstAppMobile.ViewModels
             // 1. On crée le nouvel objet avec les données saisies
             var entry = new FitnessEntry
             {
-                ActivityType = activityType,
-                DurationMinutes = int.Parse(durationMinutes),
-                Notes = notes,
+                ActivityType = ActivityType,
+                DurationMinutes = int.Parse(DurationMinutes),
+                Notes = Notes,
                 Date = DateTime.Now
             };
 
@@ -39,9 +39,9 @@ namespace MyFirstAppMobile.ViewModels
             WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
 
             // 3. On vide le formulaire pour la prochaine fois
-            activityType = string.Empty;
-            durationMinutes = "0";
-            notes = string.Empty;
+            ActivityType = string.Empty;
+            DurationMinutes = "0";
+            Notes = string.Empty;
 
             // 4. On revient en arrière
             await Shell.Current.GoToAsync("..");

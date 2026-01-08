@@ -10,5 +10,14 @@ namespace MyFirstAppMobile
             InitializeComponent();
             BindingContext = viewModel;
         }
+
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+            if (BindingContext is EntriesViewModel viewModel)
+            {
+                await viewModel.LoadCommand.ExecuteAsync(null);
+            }
+        }
     }
 }

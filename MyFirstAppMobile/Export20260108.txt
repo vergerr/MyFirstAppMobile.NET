@@ -3,6 +3,61 @@
 
 
 
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Data\IEntriesRepository.cs =====
+
+using MyFirstAppMobile.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MyFirstAppMobile.Data
+{
+    public interface IEntriesRepository
+    {
+        Task<IReadOnlyList<FitnessEntry>> GetAllAsync();
+        Task AddAsync(FitnessEntry entry);
+        Task DeleteAsync(Guid id);
+    }
+}
+
+
+
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Data\InMemoryEntriesRepository.cs =====
+
+using MyFirstAppMobile.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MyFirstAppMobile.Data
+{
+    public class InMemoryEntriesRepository : IEntriesRepository
+    {
+        private readonly List<FitnessEntry> _items = new();
+
+        public Task AddAsync(FitnessEntry entry)
+        {
+            _items.Add(entry);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(Guid id)
+        {
+            _items.RemoveAll(x => x.Id == id);
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<FitnessEntry>> GetAllAsync()
+        => Task.FromResult((IReadOnlyList<FitnessEntry>)_items);
+    }
+}
+
+
+
 ===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Interface\IPlatformLogger.cs =====
 
 using System;
@@ -240,10 +295,10 @@ namespace MyFirstAppMobile.WinUI
 
 
 
-===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\ViewModels\EntriesViewModel.cs =====
-
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using MyFirstAppMobile.Data;
 using MyFirstAppMobile.Models;
 using System.Collections.ObjectModel;
 
@@ -251,37 +306,94 @@ namespace MyFirstAppMobile.ViewModels
 {
     public partial class EntriesViewModel : ObservableObject
     {
+        private readonly IEntriesRepository _repo;
         public ObservableCollection<FitnessEntry> Entries { get; set; } = new();
-        
-        // Propriétés pour le formulaire (liées aux champs de saisie)
-        [ObservableProperty]
-        string activityType;
 
-        [ObservableProperty]
-        int durationMinutes;
-
-        [ObservableProperty]
-        string notes;
+        public EntriesViewModel(IEntriesRepository repo)
+        {
+            _repo = repo;
+            // Réception du message venant du formulaire
+            WeakReferenceMessenger.Default.Register<NewEntryMessage>(this, async (r, m) =>
+            {
+                await repo.AddAsync(m.Value);
+                Entries.Add(m.Value);
+            });
+        }
 
         [RelayCommand]
-        public async Task SaveEntry()
+        public async Task Load ()
+        {
+            Entries.Clear();
+            var all = await _repo.GetAllAsync();
+            foreach (var entry in all)
+            {
+                Entries.Add(entry);
+            }
+        }
+
+        [RelayCommand]
+        public async Task Add()
+        {
+            await Shell.Current.GoToAsync(nameof(EntryPage));
+        }
+
+        [RelayCommand]
+        public async Task Delete(Guid id)
+        {
+            await _repo.DeleteAsync(id);
+            Entries.Remove(Entries.First(e => e.Id == id));
+        }
+    }
+}
+
+
+
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\ViewModels\EntryFormViewModel.cs =====
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using MyFirstAppMobile.Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MyFirstAppMobile.ViewModels
+{
+    public partial class EntryFormViewModel : ObservableObject
+    {
+        // Propriétés pour le formulaire (liées aux champs de saisie)
+        [ObservableProperty]
+        private string activityType;
+
+        [ObservableProperty]
+        private string durationMinutes;
+
+        [ObservableProperty]
+        private string notes;
+
+        [RelayCommand]
+        public async Task Save()
         {
             // 1. On crée le nouvel objet avec les données saisies
-            var newEntry = new FitnessEntry
+            var entry = new FitnessEntry
             {
-                ActivityType = this.ActivityType,
-                DurationMinutes = this.DurationMinutes,
-                Notes = this.Notes,
+                ActivityType = ActivityType,
+                DurationMinutes = int.Parse(DurationMinutes),
+                Notes = Notes,
                 Date = DateTime.Now
             };
 
             // 2. On l'ajoute à la liste
-            Entries.Add(newEntry);
+            WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
 
             // 3. On vide le formulaire pour la prochaine fois
-            activityType = string.Empty;
-            durationMinutes = 0;
-            notes = string.Empty;
+            ActivityType = string.Empty;
+            DurationMinutes = "0";
+            Notes = string.Empty;
 
             // 4. On revient en arrière
             await Shell.Current.GoToAsync("..");
@@ -292,14 +404,11 @@ namespace MyFirstAppMobile.ViewModels
         {
             await Shell.Current.GoToAsync("..");
         }
-
-
-
-        [RelayCommand]
-        public async Task Add()
-        {
-            await Shell.Current.GoToAsync(nameof(EntryPage));
-        }
+    }
+    // Message strongly-typed
+    public sealed class NewEntryMessage : ValueChangedMessage<FitnessEntry>
+    {
+        public NewEntryMessage(FitnessEntry value) : base(value) { }
     }
 }
 
@@ -382,6 +491,8 @@ namespace MyFirstAppMobile
 
 
 
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\DefaultLogger.cs =====
+
 using MyFirstAppMobile.Interface;
 using System;
 using System.Collections.Generic;
@@ -414,18 +525,18 @@ namespace MyFirstAppMobile
         <Label Text="Nouvelle ActivitÃ©" FontSize="24" FontAttributes="Bold" />
 
         <Entry Placeholder="Type d'activitÃ© (ex: Course)" 
-           Text="{Binding ActivityType}" />
+           Text="{Binding ActivityType, Mode=TwoWay}" />
 
         <Entry Placeholder="DurÃ©e (minutes)" 
-           Text="{Binding DurationMinutes}" 
+           Text="{Binding DurationMinutes, Mode=TwoWay}" 
            Keyboard="Numeric" />
 
         <Editor Placeholder="Notes additionnelles" 
-            Text="{Binding Notes}"
+            Text="{Binding Notes, Mode=TwoWay}"
             HeightRequest="100" />
 
         <Button Text="Enregistrer" 
-            Command="{Binding SaveEntryCommand}"
+            Command="{Binding SaveCommand}"
             BackgroundColor="Green"
             TextColor="White" />
 
@@ -446,10 +557,10 @@ namespace MyFirstAppMobile;
 
 public partial class EntryPage : ContentPage
 {
-	public EntryPage(EntriesViewModel viewModel)
+	public EntryPage(EntryFormViewModel vm)
 	{
 		InitializeComponent();
-		BindingContext = viewModel;
+		BindingContext = vm;
 	}
 }
 
@@ -484,7 +595,10 @@ public class LifecycleLogger
 
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             x:Class="MyFirstAppMobile.MainPage">
+             xmlns:viewmodels="clr-namespace:MyFirstAppMobile.ViewModels"
+             xmlns:models="clr-namespace:MyFirstAppMobile.Models"
+             x:Class="MyFirstAppMobile.MainPage"
+             x:DataType="viewmodels:EntriesViewModel">
 
     <VerticalStackLayout Padding="16" Spacing="12">
 
@@ -493,12 +607,15 @@ public class LifecycleLogger
 
         <CollectionView ItemsSource="{Binding Entries}">
             <CollectionView.ItemTemplate>
-                <DataTemplate>
+                <DataTemplate x:DataType="models:FitnessEntry">
                     <VerticalStackLayout Padding="12">
                         <Label Text="{Binding ActivityType}" FontSize="18"/>
                         <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
                         <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
                         <Label Text="{Binding Notes}" FontAttributes="Italic"/>
+                        <Button Text="Supprimer l'entrée" 
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=DeleteCommand}"
+                                CommandParameter="{Binding Id}" />
                     </VerticalStackLayout>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
@@ -523,6 +640,15 @@ namespace MyFirstAppMobile
             InitializeComponent();
             BindingContext = viewModel;
         }
+
+        protected override async void OnAppearing()
+        {
+            base.OnAppearing();
+            if (BindingContext is EntriesViewModel viewModel)
+            {
+                await viewModel.LoadCommand.ExecuteAsync(null);
+            }
+        }
     }
 }
 
@@ -532,6 +658,7 @@ namespace MyFirstAppMobile
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.LifecycleEvents;
+using MyFirstAppMobile.Data;
 using MyFirstAppMobile.Interface;
 using MyFirstAppMobile.ViewModels;
 
@@ -550,8 +677,12 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
-            builder.Services.AddSingleton<MainPage>();
+            builder.Services.AddSingleton<IEntriesRepository, InMemoryEntriesRepository>();
+            
             builder.Services.AddSingleton<EntriesViewModel>();
+            builder.Services.AddTransient<EntryFormViewModel>();
+
+            builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
 
             builder.UseMauiApp<App>()
