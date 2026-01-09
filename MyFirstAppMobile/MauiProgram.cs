@@ -19,8 +19,9 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
-            builder.Services.AddSingleton<IEntriesRepository, InMemoryEntriesRepository>();
-            
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, "fitness.db3");
+            builder.Services.AddSingleton<IEntriesRepository>(_ => new SqliteEntriesRepository(dbPath));
+
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryFormViewModel>();
 

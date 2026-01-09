@@ -1,8 +1,3 @@
-===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\bin\Debug\net9.0-windows10.0.19041.0\win10-x64\Microsoft.UI.Xaml =====
-
-
-
-
 ===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Data\IEntriesRepository.cs =====
 
 using MyFirstAppMobile.Models;
@@ -24,10 +19,10 @@ namespace MyFirstAppMobile.Data
 
 
 
-===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Data\InMemoryEntriesRepository.cs =====
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\Data\SqliteEntriesRepository.cs =====
 
 using MyFirstAppMobile.Models;
-using System;
+using SQLite;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -35,24 +30,41 @@ using System.Threading.Tasks;
 
 namespace MyFirstAppMobile.Data
 {
-    public class InMemoryEntriesRepository : IEntriesRepository
+    internal class SqliteEntriesRepository : IEntriesRepository
     {
-        private readonly List<FitnessEntry> _items = new();
+        private readonly SQLiteAsyncConnection _db;
+        private bool _initialized;
 
-        public Task AddAsync(FitnessEntry entry)
+        public SqliteEntriesRepository(string dbPath)
         {
-            _items.Add(entry);
-            return Task.CompletedTask;
+            _db = new SQLiteAsyncConnection(dbPath);
         }
 
-        public Task DeleteAsync(Guid id)
+        private async Task InitAsync()
         {
-            _items.RemoveAll(x => x.Id == id);
-            return Task.CompletedTask;
+            if (_initialized) return;
+            await _db.CreateTableAsync<FitnessEntry>();
+            _initialized = true;
+        }
+        public async Task AddAsync(FitnessEntry entry)
+        {
+            await InitAsync();
+            await _db.InsertAsync(entry);
         }
 
-        public Task<IReadOnlyList<FitnessEntry>> GetAllAsync()
-        => Task.FromResult((IReadOnlyList<FitnessEntry>)_items);
+        public async Task DeleteAsync(Guid id)
+        {
+            await InitAsync();
+            await _db.DeleteAsync<FitnessEntry>(id);
+        }
+
+        public async Task<IReadOnlyList<FitnessEntry>> GetAllAsync()
+        {
+            await InitAsync();
+            return await _db.Table<FitnessEntry>()
+                            .OrderByDescending(x => x.Date)
+                            .ToListAsync();
+        }
     }
 }
 
@@ -83,11 +95,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using SQLite;
 
 namespace MyFirstAppMobile.Models
 {
     public class FitnessEntry
     {
+        [PrimaryKey]
         public Guid Id { get; set; } = Guid.NewGuid();
         public DateTime Date { get; set; } = DateTime.Today;
         public string ActivityType { get; set; } = "";
@@ -295,6 +309,8 @@ namespace MyFirstAppMobile.WinUI
 
 
 
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\ViewModels\EntriesViewModel.cs =====
+
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -341,7 +357,10 @@ namespace MyFirstAppMobile.ViewModels
         public async Task Delete(Guid id)
         {
             await _repo.DeleteAsync(id);
-            Entries.Remove(Entries.First(e => e.Id == id));
+            FitnessEntry fe = Entries.First(e => e.Id == id);
+            if (fe == null)
+                return;
+            Entries.Remove(fe);
         }
     }
 }
@@ -677,8 +696,9 @@ namespace MyFirstAppMobile
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
             builder.Services.AddSingleton<LifecycleLogger>();
-            builder.Services.AddSingleton<IEntriesRepository, InMemoryEntriesRepository>();
-            
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, "fitness.db3");
+            builder.Services.AddSingleton<IEntriesRepository>(_ => new SqliteEntriesRepository(dbPath));
+
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryFormViewModel>();
 
