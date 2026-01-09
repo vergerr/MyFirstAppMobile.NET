@@ -23,28 +23,40 @@ namespace MyFirstAppMobile.ViewModels
         [ObservableProperty]
         private string notes;
 
+        private bool isBusy;
+
         [RelayCommand]
         public async Task Save()
         {
-            // 1. On crée le nouvel objet avec les données saisies
-            var entry = new FitnessEntry
+            if (isBusy) return;
+            isBusy = true;
+
+            try
             {
-                ActivityType = ActivityType,
-                DurationMinutes = int.Parse(DurationMinutes),
-                Notes = Notes,
-                Date = DateTime.Now
-            };
+                // 1. On crée le nouvel objet avec les données saisies
+                var entry = new FitnessEntry
+                {
+                    ActivityType = ActivityType,
+                    DurationMinutes = int.Parse(DurationMinutes),
+                    Notes = Notes,
+                    Date = DateTime.Now
+                };
 
-            // 2. On l'ajoute à la liste
-            WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
+                // 2. On l'ajoute à la liste
+                WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
 
-            // 3. On vide le formulaire pour la prochaine fois
-            ActivityType = string.Empty;
-            DurationMinutes = "0";
-            Notes = string.Empty;
+                // 3. On vide le formulaire pour la prochaine fois
+                ActivityType = string.Empty;
+                DurationMinutes = "0";
+                Notes = string.Empty;
 
-            // 4. On revient en arrière
-            await Shell.Current.GoToAsync("..");
+                // 4. On revient en arrière
+                await Shell.Current.GoToAsync("..");
+            }
+            finally
+            {
+                isBusy = false;
+            }
         }
 
         [RelayCommand]

@@ -19,18 +19,34 @@ namespace MyFirstAppMobile.ViewModels
             WeakReferenceMessenger.Default.Register<NewEntryMessage>(this, async (r, m) =>
             {
                 await repo.AddAsync(m.Value);
-                Entries.Add(m.Value);
             });
         }
+
+        private readonly SemaphoreSlim _semaphore = new(1,1);
+
+        [ObservableProperty]
+        private bool isLoading;
 
         [RelayCommand]
         public async Task Load ()
         {
-            Entries.Clear();
-            var all = await _repo.GetAllAsync();
-            foreach (var entry in all)
+            if (!await _semaphore.WaitAsync(0))
+                return;
+
+            try
             {
-                Entries.Add(entry);
+                isLoading = true;
+                Entries.Clear();
+                var all = await _repo.GetAllAsync();
+                foreach (var entry in all)
+                {
+                    Entries.Add(entry);
+                }
+            }
+            finally
+            {
+                isLoading = false;
+                _semaphore.Release();
             }
         }
 
