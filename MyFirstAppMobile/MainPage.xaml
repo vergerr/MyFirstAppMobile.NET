@@ -8,7 +8,7 @@
     <VerticalStackLayout Padding="16" Spacing="12">
 
         <Button Text="Nouvelle entrée"
-                IsEnabled="{Binding !IsLoading, Converter={StaticResource InverseBoolConverter}}"
+                IsEnabled="{Binding CanInteract}}"
                 Command="{Binding AddCommand}" />
 
         <CollectionView ItemsSource="{Binding Entries}">
@@ -28,6 +28,9 @@
                             <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
                             <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
                             <Label Text="{Binding Notes}" FontAttributes="Italic"/>
+                            <Button Text="Modifier" 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=EditCommand}"
+                                    CommandParameter="{Binding Id}"/>
                         </VerticalStackLayout>
                     </SwipeView>
                 </DataTemplate>
