@@ -6,11 +6,15 @@
              x:DataType="viewmodels:EntriesViewModel">
 
     <VerticalStackLayout Padding="16" Spacing="12">
-
+        <SearchBar Placeholder="Search items..." TextChanged="OnTextChanged" />
         <Button Text="Nouvelle entrée"
-                IsEnabled="{Binding CanInteract}}"
+                IsEnabled="{Binding CanInteract}"
                 Command="{Binding AddCommand}" />
-
+        <HorizontalStackLayout Spacing="5" HorizontalOptions="Center">
+            <Button Text="Tout" Clicked="OnFilterAllClicked" />
+            <Button Text="Semaine" Clicked="OnFilterWeekClicked" />
+            <Button Text="Mois" Clicked="OnFilterMonthClicked" />
+        </HorizontalStackLayout>
         <CollectionView ItemsSource="{Binding Entries}">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:FitnessEntry">

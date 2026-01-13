@@ -55,17 +55,49 @@ namespace MyFirstAppMobile.ViewModels
             try
             {
                 isLoading = true;
-                Entries.Clear();
                 var all = await _repo.GetAllAsync();
-                foreach (var entry in all)
-                {
-                    Entries.Add(entry);
-                }
+                ReplaceEntries(all);
             }
             finally
             {
                 isLoading = false;
                 _semaphore.Release();
+            }
+        }
+
+        private CancellationTokenSource? _searchCts;
+
+        [RelayCommand]
+        public async Task Search(string search)
+        {
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+
+
+            try
+            {
+                await Task.Delay(300, token); // debounce
+                if (token.IsCancellationRequested)
+                    return;
+
+                if (!await _semaphore.WaitAsync(0))
+                    return;
+                try
+                {
+                    isLoading = true;
+                    var all = await _repo.GetBySearchAsync(search);
+                    ReplaceEntries(all);
+                }
+                finally
+                {
+                    isLoading = false;
+                    _semaphore.Release();
+                }
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignore
             }
         }
 
@@ -92,6 +124,37 @@ namespace MyFirstAppMobile.ViewModels
             if (fe is null)
                 return;
             Entries.Remove(fe);
+        }
+
+        [RelayCommand]
+        // Méthode principale de filtrage
+        public async Task ApplyFilter(string range)
+        {
+            DateTime now = DateTime.Now;
+            var all = await _repo.GetAllAsync();
+
+            if (range == "Week")
+            {
+                // Filtre : 7 derniers jours
+                all = all.Where(i => i.Date >= now.AddDays(-7)).ToList();
+            }
+            else if (range == "Month")
+            {
+                // Filtre : même mois et même année
+                all = all.Where(i => i.Date.Month == now.Month && i.Date.Year == now.Year).ToList();
+            }
+
+            // Mise à jour de la collection affichée
+            ReplaceEntries(all);
+        }
+
+        public void ReplaceEntries(IEnumerable<FitnessEntry> entries)
+        {
+            Entries.Clear();
+            foreach (var entry in entries)
+            {
+                Entries.Add(entry);
+            }
         }
     }
 }
