@@ -1,4 +1,5 @@
-﻿using MyFirstAppMobile.ViewModels;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using MyFirstAppMobile.ViewModels;
 using System.Windows.Input;
 
 namespace MyFirstAppMobile
@@ -20,29 +21,6 @@ namespace MyFirstAppMobile
                 await viewModel.SearchCommand.ExecuteAsync(searchBar.Text);
             }
         }
-
-        async void OnFilterWeekClicked(object sender, EventArgs e)
-        {
-            if (BindingContext is EntriesViewModel viewModel)
-            {
-                await viewModel.ApplyFilterCommand.ExecuteAsync("Week");
-            }
-        }
-        async void OnFilterMonthClicked(object sender, EventArgs e)
-        {
-            if (BindingContext is EntriesViewModel viewModel)
-            {
-                await viewModel.ApplyFilterCommand.ExecuteAsync("Month");
-            }
-        }
-        async void OnFilterAllClicked(object sender, EventArgs e)
-        {
-            if (BindingContext is EntriesViewModel viewModel)
-            {
-                await viewModel.ApplyFilterCommand.ExecuteAsync("All");
-            }
-        }
-
         protected override async void OnAppearing()
         {
             base.OnAppearing();

@@ -62,7 +62,7 @@ namespace MyFirstAppMobile.Data
             await InitAsync();
             if (string.IsNullOrEmpty(search))
                 return await GetAllAsync();
-            var pattern = search.Trim();
+            var pattern = search.Trim().ToLower();
             return await _db.Table<FitnessEntry>()
                             .Where(x =>  x.ActivityType.Contains(pattern) || x.Notes.Contains(pattern))
                             .OrderByDescending(x => x.Date)

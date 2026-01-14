@@ -12,6 +12,52 @@ namespace MyFirstAppMobile.ViewModels
         private readonly IEntriesRepository _repo;
         public ObservableCollection<FitnessEntry> Entries { get; } = new();
 
+        // Liste des options pour le Picker
+        public List<string> SortOptions { get; } = new List<string>
+    {
+        "Date (Desc)",
+        "Date (Asc)",
+        "Duration (Desc)",
+        "Duration (Asc)"
+    };
+
+        public List<string> FilterOptions { get; } = new List<string>
+    {
+        "Tout",
+        "Semaine",
+        "Mois"
+    };
+
+        private string _selectedFilter;
+        public string SelectedFilter
+        {
+            get => _selectedFilter;
+            set
+            {
+                if (_selectedFilter != value)
+                {
+                    _selectedFilter = value;
+                    OnPropertyChanged();
+                    _ = Refresh();
+                }
+            }
+        }
+
+        private string _selectedSort;
+        public string SelectedSort
+        {
+            get => _selectedSort;
+            set
+            {
+                if (_selectedSort != value)
+                {
+                    _selectedSort = value;
+                    OnPropertyChanged();
+                    _ = Refresh(); ; // On retrie dès que la sélection change
+                }
+            }
+        }
+
         public EntriesViewModel(IEntriesRepository repo)
         {
             _repo = repo;
@@ -19,29 +65,23 @@ namespace MyFirstAppMobile.ViewModels
             WeakReferenceMessenger.Default.Register<NewEntryMessage>(this, async (r, m) =>
             {
                 await _repo.AddAsync(m.Value);
+                await Refresh();
             });
 
             //Handler de réception pour modification d'un EntryFitness
             WeakReferenceMessenger.Default.Register<UpdateEntryMessage>(this, async (r, m) =>
             {
                 await _repo.UpdateAsync(m.Value);
-
-                var current = Entries.FirstOrDefault(x => x.Id == m.Value.Id);
-                if (current is null) return;
-
-                var idx = Entries.IndexOf(current);
-                Entries[idx] = m.Value;
-
+                await Refresh();
             });
-
-
         }
 
         private readonly SemaphoreSlim _semaphore = new(1, 1);
 
+        [ObservableProperty]
         private bool isLoading;
-        public bool CanInteract => !isLoading;
-        void OnIsLoadingChanged()
+        public bool CanInteract => !IsLoading;
+        partial void OnIsLoadingChanged(bool value)
         {
             OnPropertyChanged(nameof(CanInteract));
         }
@@ -54,52 +94,62 @@ namespace MyFirstAppMobile.ViewModels
 
             try
             {
-                isLoading = true;
+                IsLoading = true;
                 var all = await _repo.GetAllAsync();
                 ReplaceEntries(all);
             }
             finally
             {
-                isLoading = false;
+                IsLoading = false;
                 _semaphore.Release();
             }
         }
 
-        private CancellationTokenSource? _searchCts;
+        private string _currentSearch = string.Empty;
 
-        [RelayCommand]
-        public async Task Search(string search)
+        public async Task Refresh()
         {
-            _searchCts?.Cancel();
-            _searchCts = new CancellationTokenSource();
-            var token = _searchCts.Token;
-
-
+            if (!await _semaphore.WaitAsync(0)) return;
             try
             {
-                await Task.Delay(300, token); // debounce
-                if (token.IsCancellationRequested)
-                    return;
+                IsLoading = true;
 
-                if (!await _semaphore.WaitAsync(0))
-                    return;
-                try
+                var all = await _repo.GetAllAsync();
+                var now = DateTime.Now;
+
+                if (_selectedFilter == "Semaine")
+                    all = all.Where(i => i.Date >= now.AddDays(-7)).ToList();
+                else if (_selectedFilter == "Mois")
+                    all = all.Where(i => i.Date.Month == now.Month && i.Date.Year == now.Year).ToList();
+
+                if (!string.IsNullOrWhiteSpace(_currentSearch))
                 {
-                    isLoading = true;
-                    var all = await _repo.GetBySearchAsync(search);
-                    ReplaceEntries(all);
+                    var p = _currentSearch.Trim();
+                    all = all.Where(x =>
+                        (x.ActivityType?.Contains(p, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Notes?.Contains(p, StringComparison.OrdinalIgnoreCase) ?? false)
+                    ).ToList();
                 }
-                finally
+
+                IEnumerable<FitnessEntry> ordered = SelectedSort switch
                 {
-                    isLoading = false;
-                    _semaphore.Release();
-                }
+                    "Date (Desc)" => all.OrderByDescending(i => i.Date),
+                    "Date (Asc)" => all.OrderBy(i => i.Date),
+                    "Duration (Desc)" => all.OrderByDescending(i => i.DurationMinutes),
+                    "Duration (Asc)" => all.OrderBy(i => i.DurationMinutes),
+                    _ => all
+                };
+
+                ReplaceEntries(ordered);
             }
-            catch (TaskCanceledException)
+            finally
             {
-                // Ignore
+                IsLoading = false;
+                _semaphore.Release();
             }
         }
+
+        #region Commands
 
         [RelayCommand]
         public async Task Add()
@@ -117,6 +167,15 @@ namespace MyFirstAppMobile.ViewModels
         }
 
         [RelayCommand]
+        public async Task ShowDetails(Guid id)
+        {
+            await Shell.Current.GoToAsync(nameof(DetailsEntryPage), new Dictionary<string, object>
+            {
+                ["EntryId"] = id
+            });
+        }
+
+        [RelayCommand]
         public async Task Delete(Guid id)
         {
             await _repo.DeleteAsync(id);
@@ -125,28 +184,41 @@ namespace MyFirstAppMobile.ViewModels
                 return;
             Entries.Remove(fe);
         }
+        #endregion
+
+        #region Searching
+        [ObservableProperty]
+        private string searchText;
+
+        partial void OnSearchTextChanged(string value)
+        {
+            _ = Search(value);
+        }
+
+        private CancellationTokenSource? _searchCts;
 
         [RelayCommand]
-        // Méthode principale de filtrage
-        public async Task ApplyFilter(string range)
+        public async Task Search(string search)
         {
-            DateTime now = DateTime.Now;
-            var all = await _repo.GetAllAsync();
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
 
-            if (range == "Week")
+            try
             {
-                // Filtre : 7 derniers jours
-                all = all.Where(i => i.Date >= now.AddDays(-7)).ToList();
-            }
-            else if (range == "Month")
-            {
-                // Filtre : même mois et même année
-                all = all.Where(i => i.Date.Month == now.Month && i.Date.Year == now.Year).ToList();
-            }
+                await Task.Delay(300, token); // debounce
+                if (token.IsCancellationRequested)
+                    return;
 
-            // Mise à jour de la collection affichée
-            ReplaceEntries(all);
+                _currentSearch = search;
+                await Refresh();
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignore
+            }
         }
+        #endregion
 
         public void ReplaceEntries(IEnumerable<FitnessEntry> entries)
         {
