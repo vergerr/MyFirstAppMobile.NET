@@ -12,5 +12,7 @@ namespace MyFirstAppMobile.Data
         Task<IReadOnlyList<FitnessEntry>> GetAllAsync();
         Task AddAsync(FitnessEntry entry);
         Task DeleteAsync(Guid id);
+        Task UpdateAsync(FitnessEntry entry);
+        Task<FitnessEntry?> GetByIdAsync(Guid id);
     }
 }

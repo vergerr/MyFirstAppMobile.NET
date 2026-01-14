@@ -17,9 +17,13 @@
             Text="{Binding Notes, Mode=TwoWay}"
             HeightRequest="100" />
 
+        <Label Text="Date : " FontSize="16"/>
+        <DatePicker 
+            Date="{Binding Date, Mode=TwoWay}" />
+        
         <Button Text="Enregistrer" 
             Command="{Binding SaveCommand}"
-            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+            IsEnabled="{Binding CanSave}"
             BackgroundColor="Green"
             TextColor="White" />
 

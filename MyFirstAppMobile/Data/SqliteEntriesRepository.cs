@@ -42,5 +42,19 @@ namespace MyFirstAppMobile.Data
                             .OrderByDescending(x => x.Date)
                             .ToListAsync();
         }
+
+        public async Task UpdateAsync(FitnessEntry entry)
+        {
+            await InitAsync();
+            await  _db.UpdateAsync(entry);
+        }
+
+        public async Task<FitnessEntry?> GetByIdAsync(Guid id)
+        {
+            await InitAsync();
+            return await _db.Table<FitnessEntry>()
+                            .Where(x => x.Id == id)
+                            .FirstOrDefaultAsync();
+        }
     }
 }

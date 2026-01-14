@@ -14,6 +14,8 @@ namespace MyFirstAppMobile.Data
         Task<IReadOnlyList<FitnessEntry>> GetAllAsync();
         Task AddAsync(FitnessEntry entry);
         Task DeleteAsync(Guid id);
+        Task UpdateAsync(FitnessEntry entry);
+        Task<FitnessEntry?> GetByIdAsync(Guid id);
     }
 }
 
@@ -64,6 +66,18 @@ namespace MyFirstAppMobile.Data
             return await _db.Table<FitnessEntry>()
                             .OrderByDescending(x => x.Date)
                             .ToListAsync();
+        }
+
+        public async Task UpdateAsync(FitnessEntry entry)
+        {
+            await InitAsync();
+            await  _db.UpdateAsync(entry);
+        }
+
+        public async Task<FitnessEntry?> GetByIdAsync(Guid id)
+        {
+            await InitAsync();
+            return await _db.Table<FitnessEntry>().FirstAsync(x => x.Id == id);
         }
     }
 }
@@ -323,27 +337,58 @@ namespace MyFirstAppMobile.ViewModels
     public partial class EntriesViewModel : ObservableObject
     {
         private readonly IEntriesRepository _repo;
-        public ObservableCollection<FitnessEntry> Entries { get; set; } = new();
+        public ObservableCollection<FitnessEntry> Entries { get;} = new();
 
         public EntriesViewModel(IEntriesRepository repo)
         {
             _repo = repo;
-            // Réception du message venant du formulaire
+            // Handler de réception du message venant du formulaire pour une nouvelel EntryFitness
             WeakReferenceMessenger.Default.Register<NewEntryMessage>(this, async (r, m) =>
             {
-                await repo.AddAsync(m.Value);
-                Entries.Add(m.Value);
+                await _repo.AddAsync(m.Value);
             });
+
+            //Handler de réception pour modification d'un EntryFitness
+            WeakReferenceMessenger.Default.Register<UpdateEntryMessage>(this, async (r, m) => 
+            { 
+                await _repo.UpdateAsync(m.Value);
+
+                var current = Entries.FirstOrDefault(x => x.Id == m.Value.Id);
+                if (current is null) return;
+
+                var idx = Entries.IndexOf(current);
+                Entries[idx] = m.Value;
+
+            });
+
+
         }
+
+        private readonly SemaphoreSlim _semaphore = new(1,1);
+
+        [ObservableProperty]
+        private bool isLoading;
 
         [RelayCommand]
         public async Task Load ()
         {
-            Entries.Clear();
-            var all = await _repo.GetAllAsync();
-            foreach (var entry in all)
+            if (!await _semaphore.WaitAsync(0))
+                return;
+
+            try
             {
-                Entries.Add(entry);
+                isLoading = true;
+                Entries.Clear();
+                var all = await _repo.GetAllAsync();
+                foreach (var entry in all)
+                {
+                    Entries.Add(entry);
+                }
+            }
+            finally
+            {
+                isLoading = false;
+                _semaphore.Release();
             }
         }
 
@@ -351,6 +396,15 @@ namespace MyFirstAppMobile.ViewModels
         public async Task Add()
         {
             await Shell.Current.GoToAsync(nameof(EntryPage));
+        }
+
+        [RelayCommand]
+        public async Task Edit(Guid id)
+        {
+            await Shell.Current.GoToAsync(nameof(EntryPage), new Dictionary<string, object>
+            {
+                ["EntryId"] = id
+            });
         }
 
         [RelayCommand]
@@ -373,9 +427,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.Mvvm.Messaging.Messages;
+using MyFirstAppMobile.Data;
 using MyFirstAppMobile.Models;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -384,6 +440,17 @@ namespace MyFirstAppMobile.ViewModels
 {
     public partial class EntryFormViewModel : ObservableObject
     {
+        private Guid? _editId;
+        private readonly IEntriesRepository _repo;
+
+        public EntryFormViewModel(IEntriesRepository repo)
+        {
+            _repo = repo;
+        }
+
+        [ObservableProperty]
+        private DateTime date = DateTime.Today;
+
         // Propriétés pour le formulaire (liées aux champs de saisie)
         [ObservableProperty]
         private string activityType;
@@ -394,28 +461,49 @@ namespace MyFirstAppMobile.ViewModels
         [ObservableProperty]
         private string notes;
 
+        private bool isBusy;
+
         [RelayCommand]
         public async Task Save()
         {
-            // 1. On crée le nouvel objet avec les données saisies
-            var entry = new FitnessEntry
+            if (isBusy) return;
+            isBusy = true;
+
+            try
             {
-                ActivityType = ActivityType,
-                DurationMinutes = int.Parse(DurationMinutes),
-                Notes = Notes,
-                Date = DateTime.Now
-            };
+                if (string.IsNullOrEmpty(ActivityType) || !int.TryParse(DurationMinutes, out int durationConv))
+                {
+                    await Shell.Current.DisplayAlert("Erreur", "Type d'activité obligatoire et durée > 0", "OK");
+                    return;
+                }
 
-            // 2. On l'ajoute à la liste
-            WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
+                // 1. On crée le nouvel objet avec les données saisies
+                var entry = new FitnessEntry
+                {
+                    ActivityType = ActivityType,
+                    DurationMinutes = durationConv,
+                    Notes = Notes,
+                    Date = Date
+                };
 
-            // 3. On vide le formulaire pour la prochaine fois
-            ActivityType = string.Empty;
-            DurationMinutes = "0";
-            Notes = string.Empty;
+                if (_editId is null)
+                {
+                    // 2. On l'ajoute à la liste
+                    WeakReferenceMessenger.Default.Send(new NewEntryMessage(entry));
+                }
+                else
+                {
+                    entry.Id = (Guid)_editId;
+                    WeakReferenceMessenger.Default.Send(new UpdateEntryMessage(entry));
+                }
 
-            // 4. On revient en arrière
-            await Shell.Current.GoToAsync("..");
+                // 4. On revient en arrière
+                await Shell.Current.GoToAsync("..");
+            }
+            finally
+            {
+                isBusy = false;
+            }
         }
 
         [RelayCommand]
@@ -423,11 +511,42 @@ namespace MyFirstAppMobile.ViewModels
         {
             await Shell.Current.GoToAsync("..");
         }
+
+        internal async Task LoadForEditAsync(Guid id)
+        {
+            _editId = id;
+
+            var entry = await _repo.GetByIdAsync(id);
+            if (entry is null)
+            {
+                await Shell.Current.DisplayAlert("Erreur", "Erreur sur le chargement", "OK");
+                return;
+            }
+
+            ActivityType = entry.ActivityType;
+            DurationMinutes = entry.DurationMinutes.ToString();
+            Notes = entry.Notes;
+            Date = entry.Date;
+        }
+
+        internal void ResetForCreate()
+        {
+            _editId = null;
+            ActivityType = "";
+            DurationMinutes = "0";
+            Notes = "";
+            Date = DateTime.Today;
+        }
     }
     // Message strongly-typed
     public sealed class NewEntryMessage : ValueChangedMessage<FitnessEntry>
     {
         public NewEntryMessage(FitnessEntry value) : base(value) { }
+    }
+
+    public sealed class UpdateEntryMessage : ValueChangedMessage<FitnessEntry>
+    {
+        public UpdateEntryMessage(FitnessEntry value) : base(value) { }
     }
 }
 
@@ -554,8 +673,13 @@ namespace MyFirstAppMobile
             Text="{Binding Notes, Mode=TwoWay}"
             HeightRequest="100" />
 
+        <Label Text="Date : " FontSize="16"/>
+        <DatePicker 
+            Date="{Binding Date, Mode=TwoWay}" />
+        
         <Button Text="Enregistrer" 
             Command="{Binding SaveCommand}"
+            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
             BackgroundColor="Green"
             TextColor="White" />
 
@@ -571,16 +695,29 @@ namespace MyFirstAppMobile
 
 using MyFirstAppMobile.Models;
 using MyFirstAppMobile.ViewModels;
+using System.Threading.Tasks;
 
 namespace MyFirstAppMobile;
 
-public partial class EntryPage : ContentPage
+public partial class EntryPage : ContentPage, IQueryAttributable
 {
-	public EntryPage(EntryFormViewModel vm)
+	private readonly EntryFormViewModel _viewModel;
+
+    public EntryPage(EntryFormViewModel vm)
 	{
 		InitializeComponent();
+        _viewModel = vm;
 		BindingContext = vm;
 	}
+
+    async void IQueryAttributable.ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        if (query.TryGetValue("EntryId", out var value) && value is Guid id)
+            await _viewModel.LoadForEditAsync(id);
+        else
+            _viewModel.ResetForCreate();
+    }
+
 }
 
 
@@ -622,20 +759,31 @@ public class LifecycleLogger
     <VerticalStackLayout Padding="16" Spacing="12">
 
         <Button Text="Nouvelle entrée"
+                IsEnabled="{Binding !IsLoading, Converter={StaticResource InverseBoolConverter}}"
                 Command="{Binding AddCommand}" />
 
         <CollectionView ItemsSource="{Binding Entries}">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:FitnessEntry">
-                    <VerticalStackLayout Padding="12">
-                        <Label Text="{Binding ActivityType}" FontSize="18"/>
-                        <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
-                        <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
-                        <Label Text="{Binding Notes}" FontAttributes="Italic"/>
-                        <Button Text="Supprimer l'entrée" 
-                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=DeleteCommand}"
-                                CommandParameter="{Binding Id}" />
-                    </VerticalStackLayout>
+                    <SwipeView>
+                        <SwipeView.RightItems>
+                            <SwipeItems Mode="Execute">
+                                <SwipeItem Text="Supprimer"
+                           Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=DeleteCommand}"
+                           CommandParameter="{Binding Id}" />
+                            </SwipeItems>
+                        </SwipeView.RightItems>
+
+                        <VerticalStackLayout Padding="12">
+                            <Label Text="{Binding ActivityType}" HorizontalOptions="Fill" FontSize="18"/>
+                            <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
+                            <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
+                            <Label Text="{Binding Notes}" FontAttributes="Italic"/>
+                            <Button Text="Modifier" 
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=EditCommand}"
+                                    CommandParameter="{Binding Id}"/>
+                        </VerticalStackLayout>
+                    </SwipeView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
@@ -663,6 +811,7 @@ namespace MyFirstAppMobile
         protected override async void OnAppearing()
         {
             base.OnAppearing();
+
             if (BindingContext is EntriesViewModel viewModel)
             {
                 await viewModel.LoadCommand.ExecuteAsync(null);
