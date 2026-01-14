@@ -50,7 +50,7 @@ namespace MyFirstAppMobile.ViewModels
 
             try
             {
-                if (string.IsNullOrEmpty(ActivityType) || !int.TryParse(DurationMinutes, out int durationConv) || durationConv > 0)
+                if (string.IsNullOrEmpty(ActivityType) || !int.TryParse(DurationMinutes, out int durationConv) || durationConv <= 0)
                 {
                     await Shell.Current.DisplayAlert("Erreur", "Type d'activité obligatoire et durée > 0", "OK");
                     return;

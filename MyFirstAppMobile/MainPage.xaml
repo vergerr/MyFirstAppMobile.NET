@@ -4,14 +4,25 @@
              xmlns:models="clr-namespace:MyFirstAppMobile.Models"
              x:Class="MyFirstAppMobile.MainPage"
              x:DataType="viewmodels:EntriesViewModel">
-
     <VerticalStackLayout Padding="16" Spacing="12">
-
+        <ActivityIndicator IsRunning="{Binding IsLoading}" />
+        <SearchBar Placeholder="Search items..." Text="{Binding SearchText}" />
         <Button Text="Nouvelle entrée"
-                IsEnabled="{Binding CanInteract}}"
+                IsEnabled="{Binding CanInteract}"
                 Command="{Binding AddCommand}" />
+        <HorizontalStackLayout Spacing="5" HorizontalOptions="Center">
+            <Picker Title="Choisir un tri"
+                ItemsSource="{Binding SortOptions}"
+                SelectedItem="{Binding SelectedSort}" />
+            <Picker Title="Choisir un filtre"
+                ItemsSource="{Binding FilterOptions}"
+                SelectedItem="{Binding SelectedFilter}" />
+            <!--<Button Text="Tout" Clicked="OnFilterAllClicked" />
+            <Button Text="Semaine" Clicked="OnFilterWeekClicked" />
+            <Button Text="Mois" Clicked="OnFilterMonthClicked" />-->
+        </HorizontalStackLayout>
 
-        <CollectionView ItemsSource="{Binding Entries}">
+        <CollectionView ItemsSource="{Binding Entries}" EmptyView="Aucune donnée disponible pour le moment.">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:FitnessEntry">
                     <SwipeView>
@@ -28,14 +39,18 @@
                             <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
                             <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
                             <Label Text="{Binding Notes}" FontAttributes="Italic"/>
-                            <Button Text="Modifier" 
+                            <HorizontalStackLayout Spacing="5" HorizontalOptions="Center">
+                                <Button Text="Modifier" 
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=EditCommand}"
                                     CommandParameter="{Binding Id}"/>
+                                <Button Text="Détails" 
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=ShowDetailsCommand}"
+                            CommandParameter="{Binding Id}"/>
+                            </HorizontalStackLayout>
                         </VerticalStackLayout>
                     </SwipeView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-
     </VerticalStackLayout>
 </ContentPage>

@@ -24,9 +24,11 @@ namespace MyFirstAppMobile
 
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryFormViewModel>();
+            builder.Services.AddTransient<EntryDetailsViewModel>();
 
             builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
+            builder.Services.AddTransient<DetailsEntryPage>();
 
             builder.UseMauiApp<App>()
                 .ConfigureFonts(fonts =>

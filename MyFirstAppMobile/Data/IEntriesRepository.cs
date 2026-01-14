@@ -10,6 +10,7 @@ namespace MyFirstAppMobile.Data
     public interface IEntriesRepository
     {
         Task<IReadOnlyList<FitnessEntry>> GetAllAsync();
+        Task<IReadOnlyList<FitnessEntry>> GetBySearchAsync(string search);
         Task AddAsync(FitnessEntry entry);
         Task DeleteAsync(Guid id);
         Task UpdateAsync(FitnessEntry entry);

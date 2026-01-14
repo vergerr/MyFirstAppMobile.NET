@@ -12,6 +12,7 @@ namespace MyFirstAppMobile.Data
     public interface IEntriesRepository
     {
         Task<IReadOnlyList<FitnessEntry>> GetAllAsync();
+        Task<IReadOnlyList<FitnessEntry>> GetBySearchAsync(string search);
         Task AddAsync(FitnessEntry entry);
         Task DeleteAsync(Guid id);
         Task UpdateAsync(FitnessEntry entry);
@@ -77,7 +78,22 @@ namespace MyFirstAppMobile.Data
         public async Task<FitnessEntry?> GetByIdAsync(Guid id)
         {
             await InitAsync();
-            return await _db.Table<FitnessEntry>().FirstAsync(x => x.Id == id);
+            return await _db.Table<FitnessEntry>()
+                            .Where(x => x.Id == id)
+                            .FirstOrDefaultAsync();
+        }
+
+        public async Task<IReadOnlyList<FitnessEntry>> GetBySearchAsync(string search)
+        {
+            await InitAsync();
+            if (string.IsNullOrEmpty(search))
+                return await GetAllAsync();
+            var pattern = search.Trim().ToLower();
+            return await _db.Table<FitnessEntry>()
+                            .Where(x =>  x.ActivityType.Contains(pattern) || x.Notes.Contains(pattern))
+                            .OrderByDescending(x => x.Date)
+                            .ToListAsync();
+                            
         }
     }
 }
@@ -337,7 +353,53 @@ namespace MyFirstAppMobile.ViewModels
     public partial class EntriesViewModel : ObservableObject
     {
         private readonly IEntriesRepository _repo;
-        public ObservableCollection<FitnessEntry> Entries { get;} = new();
+        public ObservableCollection<FitnessEntry> Entries { get; } = new();
+
+        // Liste des options pour le Picker
+        public List<string> SortOptions { get; } = new List<string>
+    {
+        "Date (Desc)",
+        "Date (Asc)",
+        "Duration (Desc)",
+        "Duration (Asc)"
+    };
+
+        public List<string> FilterOptions { get; } = new List<string>
+    {
+        "Tout",
+        "Semaine",
+        "Mois"
+    };
+
+        private string _selectedFilter;
+        public string SelectedFilter
+        {
+            get => _selectedFilter;
+            set
+            {
+                if (_selectedFilter != value)
+                {
+                    _selectedFilter = value;
+                    OnPropertyChanged();
+                    _ = Refresh();
+                }
+            }
+        }
+
+        private string _selectedSort;
+        public string SelectedSort
+        {
+            get => _selectedSort;
+            set
+            {
+                if (_selectedSort != value)
+                {
+                    _selectedSort = value;
+                    OnPropertyChanged();
+                    _ = Refresh(); ; // On retrie dès que la sélection change
+                }
+            }
+        }
 
         public EntriesViewModel(IEntriesRepository repo)
         {
@@ -346,51 +408,91 @@ namespace MyFirstAppMobile.ViewModels
             WeakReferenceMessenger.Default.Register<NewEntryMessage>(this, async (r, m) =>
             {
                 await _repo.AddAsync(m.Value);
+                await Refresh();
             });
 
             //Handler de réception pour modification d'un EntryFitness
-            WeakReferenceMessenger.Default.Register<UpdateEntryMessage>(this, async (r, m) => 
-            { 
+            WeakReferenceMessenger.Default.Register<UpdateEntryMessage>(this, async (r, m) =>
+            {
                 await _repo.UpdateAsync(m.Value);
-
-                var current = Entries.FirstOrDefault(x => x.Id == m.Value.Id);
-                if (current is null) return;
-
-                var idx = Entries.IndexOf(current);
-                Entries[idx] = m.Value;
-
+                await Refresh();
             });
-
-
         }
 
-        private readonly SemaphoreSlim _semaphore = new(1,1);
+        private readonly SemaphoreSlim _semaphore = new(1, 1);
 
         [ObservableProperty]
         private bool isLoading;
+        public bool CanInteract => !IsLoading;
+        partial void OnIsLoadingChanged(bool value)
+        {
+            OnPropertyChanged(nameof(CanInteract));
+        }
 
         [RelayCommand]
-        public async Task Load ()
+        public async Task Load()
         {
             if (!await _semaphore.WaitAsync(0))
                 return;
 
             try
             {
-                isLoading = true;
-                Entries.Clear();
+                IsLoading = true;
                 var all = await _repo.GetAllAsync();
-                foreach (var entry in all)
-                {
-                    Entries.Add(entry);
-                }
+                ReplaceEntries(all);
             }
             finally
             {
-                isLoading = false;
+                IsLoading = false;
                 _semaphore.Release();
             }
         }
+
+        private string _currentSearch = string.Empty;
+
+        public async Task Refresh()
+        {
+            if (!await _semaphore.WaitAsync(0)) return;
+            try
+            {
+                IsLoading = true;
+
+                var all = await _repo.GetAllAsync();
+                var now = DateTime.Now;
+
+                if (_selectedFilter == "Semaine")
+                    all = all.Where(i => i.Date >= now.AddDays(-7)).ToList();
+                else if (_selectedFilter == "Mois")
+                    all = all.Where(i => i.Date.Month == now.Month && i.Date.Year == now.Year).ToList();
+
+                if (!string.IsNullOrWhiteSpace(_currentSearch))
+                {
+                    var p = _currentSearch.Trim();
+                    all = all.Where(x =>
+                        (x.ActivityType?.Contains(p, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                        (x.Notes?.Contains(p, StringComparison.OrdinalIgnoreCase) ?? false)
+                    ).ToList();
+                }
+
+                IEnumerable<FitnessEntry> ordered = SelectedSort switch
+                {
+                    "Date (Desc)" => all.OrderByDescending(i => i.Date),
+                    "Date (Asc)" => all.OrderBy(i => i.Date),
+                    "Duration (Desc)" => all.OrderByDescending(i => i.DurationMinutes),
+                    "Duration (Asc)" => all.OrderBy(i => i.DurationMinutes),
+                    _ => all
+                };
+
+                ReplaceEntries(ordered);
+            }
+            finally
+            {
+                IsLoading = false;
+                _semaphore.Release();
+            }
+        }
+
+        #region Commands
 
         [RelayCommand]
         public async Task Add()
@@ -408,13 +510,131 @@ namespace MyFirstAppMobile.ViewModels
         }
 
         [RelayCommand]
+        public async Task ShowDetails(Guid id)
+        {
+            await Shell.Current.GoToAsync(nameof(DetailsEntryPage), new Dictionary<string, object>
+            {
+                ["EntryId"] = id
+            });
+        }
+
+        [RelayCommand]
         public async Task Delete(Guid id)
         {
             await _repo.DeleteAsync(id);
-            FitnessEntry fe = Entries.First(e => e.Id == id);
-            if (fe == null)
+            var fe = Entries.FirstOrDefault(e => e.Id == id);
+            if (fe is null)
                 return;
             Entries.Remove(fe);
+        }
+        #endregion
+
+        #region Searching
+        [ObservableProperty]
+        private string searchText;
+
+        partial void OnSearchTextChanged(string value)
+        {
+            _ = Search(value);
+        }
+
+        private CancellationTokenSource? _searchCts;
+
+        [RelayCommand]
+        public async Task Search(string search)
+        {
+            _searchCts?.Cancel();
+            _searchCts = new CancellationTokenSource();
+            var token = _searchCts.Token;
+
+            try
+            {
+                await Task.Delay(300, token); // debounce
+                if (token.IsCancellationRequested)
+                    return;
+
+                _currentSearch = search;
+                await Refresh();
+            }
+            catch (TaskCanceledException)
+            {
+                // Ignore
+            }
+        }
+        #endregion
+
+        public void ReplaceEntries(IEnumerable<FitnessEntry> entries)
+        {
+            Entries.Clear();
+            foreach (var entry in entries)
+            {
+                Entries.Add(entry);
+            }
+        }
+    }
+}
+
+
+
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\ViewModels\EntryDetailsViewModel.cs =====
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using CommunityToolkit.Mvvm.Messaging.Messages;
+using MyFirstAppMobile.Data;
+using MyFirstAppMobile.Models;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MyFirstAppMobile.ViewModels
+{
+    public partial class EntryDetailsViewModel : ObservableObject
+    {
+        private Guid? _id;
+        private readonly IEntriesRepository _repo;
+
+        public EntryDetailsViewModel(IEntriesRepository repo)
+        {
+            _repo = repo;
+        }
+
+        [ObservableProperty]
+        private DateTime date = DateTime.Today;
+
+        // Propriétés pour le formulaire (liées aux champs de saisie)
+        [ObservableProperty]
+        private string activityType;
+
+        [ObservableProperty]
+        private string durationMinutes;
+
+        [ObservableProperty]
+        private string notes;
+
+        [ObservableProperty]
+        private bool isBusy;
+
+        
+        internal async Task LoadForShowDetailsAsync(Guid id)
+        {
+            _id = id;
+
+            var entry = await _repo.GetByIdAsync(id);
+            if (entry is null)
+            {
+                await Shell.Current.DisplayAlert("Erreur", "Erreur sur le chargement", "OK");
+                return;
+            }
+
+            ActivityType = entry.ActivityType;
+            DurationMinutes = entry.DurationMinutes.ToString();
+            Notes = entry.Notes;
+            Date = entry.Date;
         }
     }
 }
@@ -461,17 +681,21 @@ namespace MyFirstAppMobile.ViewModels
         [ObservableProperty]
         private string notes;
 
+        [ObservableProperty]
         private bool isBusy;
+
+        public bool CanSave => !IsBusy;
+        partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanSave));
 
         [RelayCommand]
         public async Task Save()
         {
-            if (isBusy) return;
-            isBusy = true;
+            if (IsBusy) return;
+            IsBusy = true;
 
             try
             {
-                if (string.IsNullOrEmpty(ActivityType) || !int.TryParse(DurationMinutes, out int durationConv))
+                if (string.IsNullOrEmpty(ActivityType) || !int.TryParse(DurationMinutes, out int durationConv) || durationConv <= 0)
                 {
                     await Shell.Current.DisplayAlert("Erreur", "Type d'activité obligatoire et durée > 0", "OK");
                     return;
@@ -502,7 +726,7 @@ namespace MyFirstAppMobile.ViewModels
             }
             finally
             {
-                isBusy = false;
+                IsBusy = false;
             }
         }
 
@@ -623,6 +847,7 @@ namespace MyFirstAppMobile
             InitializeComponent();
 
             Routing.RegisterRoute(nameof(EntryPage), typeof(EntryPage));
+            Routing.RegisterRoute(nameof(DetailsEntryPage), typeof(DetailsEntryPage));
         }
     }
 }
@@ -647,6 +872,63 @@ namespace MyFirstAppMobile
         {
             Debug.WriteLine(message);
         }
+    }
+}
+
+
+
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\DetailEntryPage.xaml =====
+
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="MyFirstAppMobile.DetailsEntryPage"
+             Title="DÃ©tail ActivitÃ©">
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="15">
+
+            <Frame BackgroundColor="{StaticResource Primary}" HasShadow="True">
+                <Label Text="{Binding ActivityType}" 
+                       TextColor="White" 
+                       FontSize="24" 
+                       FontAttributes="Bold" 
+                       HorizontalOptions="Center"/>
+            </Frame>
+            <Label Text="Date : " />
+            <Label Text="{Binding Date, StringFormat='{0:dd/MM/yyyy}'}" />
+            <BoxView HeightRequest="1" Color="LightGray" Margin="0,10"/>
+            <Label Text="DurÃ©e (minutes) : " />
+            <Label Text="{Binding DurationMinutes}" />
+            <BoxView HeightRequest="1" Color="LightGray" Margin="0,10"/>
+            <Label Text="Notes additionnelles : " />
+            <Label Text="{Binding Notes}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+
+
+
+===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\DetailEntryPage.xaml.cs =====
+
+using CommunityToolkit.Mvvm.Input;
+using MyFirstAppMobile.ViewModels;
+
+namespace MyFirstAppMobile;
+
+public partial class DetailsEntryPage : ContentPage, IQueryAttributable
+{
+    private readonly EntryDetailsViewModel _viewModel;
+    public DetailsEntryPage(EntryDetailsViewModel viewModel)
+	{
+		InitializeComponent();
+        _viewModel = viewModel;
+        BindingContext = viewModel;
+    }
+
+    async void IQueryAttributable.ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        if (query.TryGetValue("EntryId", out var value) && value is Guid id)
+            await _viewModel.LoadForShowDetailsAsync(id);
     }
 }
 
@@ -679,7 +961,7 @@ namespace MyFirstAppMobile
         
         <Button Text="Enregistrer" 
             Command="{Binding SaveCommand}"
-            IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}"
+            IsEnabled="{Binding CanSave}"
             BackgroundColor="Green"
             TextColor="White" />
 
@@ -755,14 +1037,25 @@ public class LifecycleLogger
              xmlns:models="clr-namespace:MyFirstAppMobile.Models"
              x:Class="MyFirstAppMobile.MainPage"
              x:DataType="viewmodels:EntriesViewModel">
-
     <VerticalStackLayout Padding="16" Spacing="12">
-
+        <ActivityIndicator IsRunning="{Binding IsLoading}" />
+        <SearchBar Placeholder="Search items..." Text="{Binding SearchText}" />
         <Button Text="Nouvelle entrée"
-                IsEnabled="{Binding !IsLoading, Converter={StaticResource InverseBoolConverter}}"
+                IsEnabled="{Binding CanInteract}"
                 Command="{Binding AddCommand}" />
+        <HorizontalStackLayout Spacing="5" HorizontalOptions="Center">
+            <Picker Title="Choisir un tri"
+                ItemsSource="{Binding SortOptions}"
+                SelectedItem="{Binding SelectedSort}" />
+            <Picker Title="Choisir un filtre"
+                ItemsSource="{Binding FilterOptions}"
+                SelectedItem="{Binding SelectedFilter}" />
+            <!--<Button Text="Tout" Clicked="OnFilterAllClicked" />
+            <Button Text="Semaine" Clicked="OnFilterWeekClicked" />
+            <Button Text="Mois" Clicked="OnFilterMonthClicked" />-->
+        </HorizontalStackLayout>
 
-        <CollectionView ItemsSource="{Binding Entries}">
+        <CollectionView ItemsSource="{Binding Entries}" EmptyView="Aucune donnée disponible pour le moment.">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:FitnessEntry">
                     <SwipeView>
@@ -779,15 +1072,19 @@ public class LifecycleLogger
                             <Label Text="{Binding DurationMinutes, StringFormat='Durée: {0} min'}" />
                             <Label Text="{Binding Date, StringFormat='Date: {0:dd/MM/yyyy}'}" />
                             <Label Text="{Binding Notes}" FontAttributes="Italic"/>
-                            <Button Text="Modifier" 
+                            <HorizontalStackLayout Spacing="5" HorizontalOptions="Center">
+                                <Button Text="Modifier" 
                                     Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=EditCommand}"
                                     CommandParameter="{Binding Id}"/>
+                                <Button Text="Détails" 
+                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:EntriesViewModel}}, Path=ShowDetailsCommand}"
+                            CommandParameter="{Binding Id}"/>
+                            </HorizontalStackLayout>
                         </VerticalStackLayout>
                     </SwipeView>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
-
     </VerticalStackLayout>
 </ContentPage>
 
@@ -795,6 +1092,7 @@ public class LifecycleLogger
 
 ===== C:\Users\rverger\source\repos\MyFirstAppMobile\MyFirstAppMobile\MainPage.xaml.cs =====
 
+using CommunityToolkit.Mvvm.ComponentModel;
 using MyFirstAppMobile.ViewModels;
 using System.Windows.Input;
 
@@ -808,6 +1106,15 @@ namespace MyFirstAppMobile
             BindingContext = viewModel;
         }
 
+        async void OnTextChanged(object sender, EventArgs e)
+        {
+            SearchBar searchBar = (SearchBar)sender;
+
+            if (BindingContext is EntriesViewModel viewModel)
+            {
+                await viewModel.SearchCommand.ExecuteAsync(searchBar.Text);
+            }
+        }
         protected override async void OnAppearing()
         {
             base.OnAppearing();
@@ -850,9 +1157,11 @@ namespace MyFirstAppMobile
 
             builder.Services.AddSingleton<EntriesViewModel>();
             builder.Services.AddTransient<EntryFormViewModel>();
+            builder.Services.AddTransient<EntryDetailsViewModel>();
 
             builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
+            builder.Services.AddTransient<DetailsEntryPage>();
 
             builder.UseMauiApp<App>()
                 .ConfigureFonts(fonts =>

@@ -1,4 +1,5 @@
-﻿using MyFirstAppMobile.ViewModels;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using MyFirstAppMobile.ViewModels;
 using System.Windows.Input;
 
 namespace MyFirstAppMobile
@@ -11,6 +12,15 @@ namespace MyFirstAppMobile
             BindingContext = viewModel;
         }
 
+        async void OnTextChanged(object sender, EventArgs e)
+        {
+            SearchBar searchBar = (SearchBar)sender;
+
+            if (BindingContext is EntriesViewModel viewModel)
+            {
+                await viewModel.SearchCommand.ExecuteAsync(searchBar.Text);
+            }
+        }
         protected override async void OnAppearing()
         {
             base.OnAppearing();
