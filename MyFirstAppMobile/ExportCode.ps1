@@ -9,7 +9,7 @@ Get-ChildItem -Path ".\*" -Recurse -Include *.cs, *.xaml | Where-Object {
     $_.FullName -notmatch '\\obj\\' -and 
     $_.FullName -notmatch '\\Resources\\' -and 
     $_.FullName -notmatch '\\bin\\' -and 
-    $_.FullName -notmatch '\\Export\\' -and 
+    $_.FullName -notmatch '\\Export*\\' -and 
     # Filtre 2 : Exclure le fichier d'export lui-même pour éviter une boucle infinie
     $_.Name -ne $exportFile 
 } | ForEach-Object {

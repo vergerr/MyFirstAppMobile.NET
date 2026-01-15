@@ -3,10 +3,10 @@ using MyFirstAppMobile.ViewModels;
 
 namespace MyFirstAppMobile;
 
-public partial class DetailsEntryPage : ContentPage, IQueryAttributable
+public partial class EntryDetailsPage : ContentPage, IQueryAttributable
 {
     private readonly EntryDetailsViewModel _viewModel;
-    public DetailsEntryPage(EntryDetailsViewModel viewModel)
+    public EntryDetailsPage(EntryDetailsViewModel viewModel)
 	{
 		InitializeComponent();
         _viewModel = viewModel;

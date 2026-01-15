@@ -5,6 +5,7 @@ using MyFirstAppMobile.Interface;
 using MyFirstAppMobile.ViewModels;
 
 
+
 namespace MyFirstAppMobile
 {
     public static class MauiProgram
@@ -28,7 +29,7 @@ namespace MyFirstAppMobile
 
             builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
-            builder.Services.AddTransient<DetailsEntryPage>();
+            builder.Services.AddTransient<EntryDetailsPage>();
 
             builder.UseMauiApp<App>()
                 .ConfigureFonts(fonts =>

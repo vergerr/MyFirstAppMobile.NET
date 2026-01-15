@@ -5,6 +5,9 @@
              x:Class="MyFirstAppMobile.MainPage"
              x:DataType="viewmodels:EntriesViewModel">
     <VerticalStackLayout Padding="16" Spacing="12">
+        <Image Source="dashboard" 
+       WidthRequest="200" 
+       HeightRequest="200"/>
         <ActivityIndicator IsRunning="{Binding IsLoading}" />
         <SearchBar Placeholder="Search items..." Text="{Binding SearchText}" />
         <Button Text="Nouvelle entrée"
