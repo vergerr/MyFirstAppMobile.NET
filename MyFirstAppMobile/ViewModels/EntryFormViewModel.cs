@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using CommunityToolkit.Mvvm.Messaging.Messages;
 using MyFirstAppMobile.Data;
+using MyFirstAppMobile.Interface;
 using MyFirstAppMobile.Models;
 using System;
 using System.Collections.Generic;
@@ -76,12 +77,27 @@ namespace MyFirstAppMobile.ViewModels
                     WeakReferenceMessenger.Default.Send(new UpdateEntryMessage(entry));
                 }
 
+                throw new Exception("TEST");
+
                 // 4. On revient en arrière
                 await Shell.Current.GoToAsync("..");
+            }catch(Exception ex)
+            {
+                bool send = await Shell.Current.DisplayAlert(
+    "Signaler un problème",
+    "Voulez-vous envoyer un rapport d’erreur (logs + infos appareil) au support ?",
+    "Envoyer",
+    "Annuler");
+
+                if (!send) return;
+
+                await SupportEmail.TrySendLogsAsync("vergerr@gmail.com");
             }
             finally
             {
                 IsBusy = false;
+
+
             }
         }
 
@@ -89,6 +105,12 @@ namespace MyFirstAppMobile.ViewModels
         public async Task Cancel()
         {
             await Shell.Current.GoToAsync("..");
+        }
+
+        [RelayCommand]
+        public async Task ReportProblem()
+        {
+            await SupportEmail.TrySendLogsAsync("vergerr@gmail.com");
         }
 
         internal async Task LoadForEditAsync(Guid id)
