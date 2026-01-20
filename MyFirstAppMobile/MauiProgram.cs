@@ -5,6 +5,7 @@ using MyFirstAppMobile.Interface;
 using MyFirstAppMobile.ViewModels;
 
 
+
 namespace MyFirstAppMobile
 {
     public static class MauiProgram
@@ -14,10 +15,12 @@ namespace MyFirstAppMobile
 
             var builder = MauiApp.CreateBuilder();
 #if ANDROID
+            //builder.Services.AddSingleton<IPlatformLogger, Platforms.Android.AndroidLogger>();
             builder.Services.AddSingleton<IPlatformLogger, Platforms.Android.AndroidLogger>();
 #else
             builder.Services.AddSingleton<IPlatformLogger, DefaultLogger>();
 #endif
+            builder.Services.AddSingleton<IAppLogger, AppLogger>();
             builder.Services.AddSingleton<LifecycleLogger>();
             var dbPath = Path.Combine(FileSystem.AppDataDirectory, "fitness.db3");
             builder.Services.AddSingleton<IEntriesRepository>(_ => new SqliteEntriesRepository(dbPath));
@@ -28,7 +31,7 @@ namespace MyFirstAppMobile
 
             builder.Services.AddSingleton<MainPage>();
             builder.Services.AddTransient<EntryPage>();
-            builder.Services.AddTransient<DetailsEntryPage>();
+            builder.Services.AddTransient<EntryDetailsPage>();
 
             builder.UseMauiApp<App>()
                 .ConfigureFonts(fonts =>
@@ -40,7 +43,20 @@ namespace MyFirstAppMobile
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
-            return builder.Build();
+            var app = builder.Build();
+
+            var logger = app.Services.GetRequiredService<IAppLogger>();
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            {
+                logger.Crit(e.ExceptionObject as Exception, $"Unhandled exception: {e.ExceptionObject}");
+            };
+            TaskScheduler.UnobservedTaskException += (sender, e) =>
+            {
+                logger.Warn(e.Exception, $"Unobserved task exception: {e.Exception}");
+                e.SetObserved();
+            };
+
+            return app;
         }
     }
 }
